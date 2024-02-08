@@ -29,9 +29,15 @@ class ServerlessSQSOfflinePlugin {
   private sqsConfig: SQSConfig;
   private sqsClient?: SQS;
   private sqsInstances: Record<string, ChildProcess> = {};
+  private readonly log: (message: string) => void;
 
-  public constructor(private serverless: Serverless) {
+  public constructor(
+    private serverless: Serverless,
+    __options: any,
+    { log }: { log: (message: string) => void },
+  ) {
     this.provider = this.serverless.getProvider("aws");
+    this.log = log;
 
     this.commands = {};
 
@@ -178,9 +184,7 @@ aws {
       return;
     }
 
-    this.serverless.cli.log(
-      `Create stream for ${functionName} on ${q.queueName}`,
-    );
+    this.log(`Create stream for ${functionName} on ${q.queueName}`);
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -287,10 +291,10 @@ aws {
             .promise()
             .then((response) => {
               if (response.StatusCode !== 200 || response.FunctionError) {
-                this.serverless.cli.log(
+                this.log(
                   `Error while processing SQS message for ${functionName}`,
                 );
-                this.serverless.cli.log(response.Payload?.toString() || "");
+                this.log(response.Payload?.toString() || "");
               } else {
                 const itemsToRetain: string[] = [];
 
@@ -311,10 +315,10 @@ aws {
                       );
                     }
                   } catch (error) {
-                    this.serverless.cli.log(
+                    this.log(
                       `Error while parsing response from lambda for ${functionName}`,
                     );
-                    this.serverless.cli.log((error as Error).message);
+                    this.log((error as Error).message);
                   }
                 }
 
@@ -338,7 +342,7 @@ aws {
               }
             })
             .catch((error) => {
-              this.serverless.cli.log(
+              this.log(
                 `SQS Offline - Lambda [${
                   params.FunctionName
                 }] failed - Message: ${(error as Error).message}`,
@@ -353,25 +357,21 @@ aws {
 
   private startSQS = async () => {
     if (this.sqsConfig.start.noStart) {
-      this.serverless.cli.log(
-        "SQS Offline - [noStart] options is true. Will not start.",
-      );
+      this.log("SQS Offline - [noStart] options is true. Will not start.");
     } else {
       const { port, proc, statsPort } = await this.spawnSQSProcess(
         this.sqsConfig.start,
       );
       proc.on("close", (code) => {
-        this.serverless.cli.log(
-          `SQS Offline - Failed to start with code ${code}`,
-        );
+        this.log(`SQS Offline - Failed to start with code ${code}`);
       });
-      this.serverless.cli.log(
+      this.log(
         `SQS Offline - Started on port ${port}. Visit: http://localhost:${statsPort} for stats`,
       );
     }
 
     if (!this.sqsConfig.start.autoCreate) {
-      this.serverless.cli.log(
+      this.log(
         "SQS Offline - [autoCreate] options is not true. Will not create queues.",
       );
       return;
@@ -387,7 +387,7 @@ aws {
         this.sqsConfig.start.secretAccessKey || "localAwsSecretAccessKey",
     };
 
-    this.serverless.cli.log(JSON.stringify(clientConfig, null, 2));
+    this.log(JSON.stringify(clientConfig, null, 2));
 
     await waitUntilUsed(
       Number(this.sqsConfig.start.port || DEFAULT_PORT),
@@ -451,7 +451,7 @@ aws {
 
   private stopSQS = async () => {
     this.killSQSProcess(this.sqsConfig.start);
-    this.serverless.cli.log("SQS Offline - Stopped");
+    this.log("SQS Offline - Stopped");
   };
 
   private createQueue = async (sqsClient: SQS, queue: any) => {
@@ -493,12 +493,10 @@ aws {
           },
         })
         .promise();
-      this.serverless.cli.log(`SQS Offline - Queue [${QueueName}] created`);
+      this.log(`SQS Offline - Queue [${QueueName}] created`);
     } catch (error) {
       if ((error as any).code === "ResourceInUseException") {
-        this.serverless.cli.log(
-          `SQS Offline - Queue [${QueueName}] already exists`,
-        );
+        this.log(`SQS Offline - Queue [${QueueName}] already exists`);
       } else {
         throw error;
       }
