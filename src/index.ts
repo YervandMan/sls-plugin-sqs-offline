@@ -436,7 +436,7 @@ aws {
 
         await Promise.all(
           events.map(async (event) => {
-            const sqs: null | Queue = event["sqs"];
+            const sqs: null | Queue = event["sqs" as keyof Serverless.Event];
 
             if (sqs == null) {
               return;
